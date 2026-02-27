@@ -1,0 +1,57 @@
+# =============================================================================
+# crontab.example - 백업 시스템 크론탭 설정 예시
+# =============================================================================
+# 적용 방법:
+#   sudo crontab -e            (root로 실행 권장)
+#   또는 서비스별 계정:
+#   sudo -u backupuser crontab -e
+#
+# 주의: BACKUP_HOME 경로를 실제 설치 경로로 수정하세요.
+# =============================================================================
+
+# 환경 변수
+BACKUP_HOME=/opt/backup-recovery-system
+GLOBAL_CONFIG=/opt/backup-recovery-system/config/global.conf
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# =============================================================================
+# [1] 일일 백업 (새벽 2시 - 서비스 부하가 낮은 시간)
+# =============================================================================
+
+# 전체 서비스 백업 (매일 새벽 2시)
+0 2 * * * backupuser $BACKUP_HOME/scripts/backup/backup_main.sh --all >> /var/log/backup-system/cron_backup.log 2>&1
+
+# 특정 서비스만 개별 시간 지정 (예: MySQL은 1시, PostgreSQL은 3시)
+# 0 1 * * * backupuser $BACKUP_HOME/scripts/backup/backup_main.sh mysql-service.conf >> /var/log/backup-system/cron_backup_mysql.log 2>&1
+# 0 3 * * * backupuser $BACKUP_HOME/scripts/backup/backup_main.sh postgresql-service.conf >> /var/log/backup-system/cron_backup_pg.log 2>&1
+
+# =============================================================================
+# [2] 일일 백업 모니터링 (백업 완료 후 오전 6시 점검)
+# =============================================================================
+
+# 전체 서비스 백업 현황 점검 및 Slack 리포트 (매일 오전 6시)
+0 6 * * * backupuser $BACKUP_HOME/scripts/monitor/monitor_main.sh >> /var/log/backup-system/cron_monitor.log 2>&1
+
+# 특정 날짜 점검 (필요 시 수동 실행)
+# 0 6 * * * backupuser $BACKUP_HOME/scripts/monitor/monitor_main.sh --date $(date -d yesterday '+%Y%m%d') >> /var/log/backup-system/cron_monitor.log 2>&1
+
+# =============================================================================
+# [3] 로그 로테이션 (크론 로그 정리 - 주 1회)
+# =============================================================================
+0 5 * * 0 root find /var/log/backup-system -name "*.log" -mtime +30 -delete
+0 5 * * 0 root find /var/log/backup-system/reports -name "*.html" -mtime +30 -delete
+
+# =============================================================================
+# [4] 보안 점검 전용 (주 1회 - 월요일 오전 7시)
+# =============================================================================
+0 7 * * 1 backupuser $BACKUP_HOME/scripts/monitor/monitor_main.sh --date $(date -d yesterday '+%Y%m%d') >> /var/log/backup-system/cron_security.log 2>&1
+
+# =============================================================================
+# [주별/월별 장기 백업 - 선택사항]
+# =============================================================================
+
+# 주별 백업 (매주 일요일 오전 1시)
+# 0 1 * * 0 backupuser BACKUP_TYPE=weekly $BACKUP_HOME/scripts/backup/backup_main.sh --all
+
+# 월별 백업 (매월 1일 오전 0시 30분)
+# 30 0 1 * * backupuser BACKUP_TYPE=monthly $BACKUP_HOME/scripts/backup/backup_main.sh --all
